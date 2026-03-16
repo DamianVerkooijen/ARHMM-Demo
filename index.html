@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WebAR Joystick Cube - iPad 5th Gen</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-world-aframe.prod.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        
+        /* UI Layer for Joysticks */
+        #ui-container {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            height: 200px;
+            z-index: 1000;
+            pointer-events: none; /* Allow clicks to pass through to AR if needed */
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-sizing: border-box;
+        }
+
+        .joystick-zone {
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: auto; /* Capture touch here */
+            touch-action: none;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            z-index: 1001;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="instructions">Point camera at floor & move slowly to detect surface</div>
+
+    <div id="ui-container">
+        <div id="left-joy" class="joystick-zone"></div>
+        <div id="right-joy" class="joystick-zone"></div>
+    </div>
+
+    <a-scene mindar-world="autoStart: true" embedded color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+        
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity id="target-container" mindar-world-target>
+            <a-box id="cube" position="0 0.5 0" material="color: #4CC3D9; opacity: 0.8" shadow></a-box>
+            <a-plane rotation="-90 0 0" width="2" height="2" material="opacity: 0.2; color: white"></a-plane>
+        </a-entity>
+
+        <a-light type="directional" position="0 5 0"></a-light>
+        <a-light type="ambient" intensity="0.5"></a-light>
+    </a-scene>
+
+    <script>
+        const cube = document.querySelector('#cube');
+        let moveData = { x: 0, y: 0 };
+        let altitudeData = 0;
+        const speed = 0.05;
+
+        // Initialize Left Joystick (Movement)
+        const leftJoy = nipplejs.create({
+            zone: document.getElementById('left-joy'),
+            mode: 'static',
+            position: { left: '75px', bottom: '75px' },
+            color: 'cyan'
+        });
+
+        leftJoy.on('move', (evt, data) => {
+            moveData.x = data.vector.x;
+            moveData.y = data.vector.y;
+        });
+
+        leftJoy.on('end', () => {
+            moveData = { x: 0, y: 0 };
+        });
+
+        // Initialize Right Joystick (Altitude)
+        const rightJoy = nipplejs.create({
+            zone: document.getElementById('right-joy'),
+            mode: 'static',
+            position: { right: '75px', bottom: '75px' },
+            color: 'red'
+        });
+
+        rightJoy.on('move', (evt, data) => {
+            // We only care about the vertical (Y) vector for altitude
+            altitudeData = data.vector.y;
+        });
+
+        rightJoy.on('end', () => {
+            altitudeData = 0;
+        });
+
+        // Game Loop to Update Cube Position
+        function update() {
+            if (cube) {
+                let pos = cube.getAttribute('position');
+                
+                // Move Forward/Backward (Z) and Left/Right (X)
+                // Note: In AR, -Z is "forward"
+                pos.x += moveData.x * speed;
+                pos.z -= moveData.y * speed; 
+                
+                // Altitude (Y)
+                pos.y += altitudeData * speed;
+
+                cube.setAttribute('position', pos);
+            }
+            requestAnimationFrame(update);
+        }
+
+        update();
+    </script>
+</body>
+</html>
