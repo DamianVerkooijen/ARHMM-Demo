@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AR Helicopter Sim</title>
+    <title>AR Heli: Classic Controls</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -9,86 +9,93 @@
     <style>
         body { margin: 0; overflow: hidden; }
         #ui-container {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 200px;
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 220px;
             z-index: 10; display: flex; justify-content: space-between; pointer-events: none;
         }
-        .joystick-zone { width: 150px; height: 150px; pointer-events: auto; margin: 20px; }
+        .joystick-zone { width: 160px; height: 160px; pointer-events: auto; margin: 30px; }
+        #label { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-family: monospace; z-index: 20; text-shadow: 1px 1px 2px black; }
     </style>
 </head>
 
 <body style="margin: 0px; overflow: hidden;">
-
+    <div id="label">LEFT: Forward/Strafe | RIGHT: Rotation/Height</div>
     <div id="ui-container">
         <div id="left-joystick" class="joystick-zone"></div>
         <div id="right-joystick" class="joystick-zone"></div>
     </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="logarithmicDepthBuffer: true;">
-        
-        <a-assets>
-            <a-asset-item id="heli-model" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/ToyCar/glTF/ToyCar.gltf"></a-asset-item>
-        </a-assets>
-
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="logarithmicDepthBuffer: true; antialias: true;">
         <a-marker preset="hiro">
             <a-entity id="heli-rig" position="0 0.5 0">
-                <a-box id="heli-body" width="0.5" height="0.3" depth="1" color="#333">
-                    <a-box position="0 0.2 0" width="0.8" height="0.02" depth="0.1" color="#888" 
-                           animation="property: rotation; to: 0 360 0; loop: true; dur: 200; easing: linear">
-                    </a-box>
+                
+                <a-box position="0 0 0" width="0.4" height="0.4" depth="0.7" color="#2c3e50">
+                    <a-box position="0 0.05 0.35" width="0.38" height="0.3" depth="0.2" color="#3498db" opacity="0.8"></a-box>
+                    
+                    <a-box position="0 0.1 -0.5" width="0.1" height="0.1" depth="0.6" color="#2c3e50"></a-box>
+                    <a-box position="0 0.2 -0.8" width="0.05" height="0.3" depth="0.1" color="#c0392b"></a-box>
+
+                    <a-entity position="0 0.25 0" animation="property: rotation; to: 0 360 0; loop: true; dur: 150; easing: linear">
+                        <a-box width="1.2" height="0.02" depth="0.08" color="#bdc3c7"></a-box>
+                        <a-box width="0.08" height="0.02" depth="1.2" color="#bdc3c7"></a-box>
+                    </a-entity>
                 </a-box>
+
+                <a-box position="-0.2 -0.25 0" width="0.05" height="0.05" depth="0.8" color="#7f8c8d"></a-box>
+                <a-box position="0.2 -0.25 0" width="0.05" height="0.05" depth="0.8" color="#7f8c8d"></a-box>
             </a-entity>
         </a-marker>
-
         <a-entity camera></a-entity>
     </a-scene>
 
     <script>
         const heli = document.querySelector('#heli-rig');
-        let moveInput = { x: 0, y: 0 };
-        let rotateInput = 0;
-        const speed = 0.05;
+        let cyclic = { x: 0, y: 0 }; // Left Stick (Forward/Strafe)
+        let pedals = { yaw: 0, alt: 0 }; // Right Stick (Rotation/Height)
+        const speed = 0.04;
 
-        // Left Joystick: Move forward/backward relative to heading
+        // Left Joystick: Move & Strafe
         nipplejs.create({
             zone: document.getElementById('left-joystick'),
-            mode: 'static', position: { left: '75px', bottom: '75px' }, color: 'blue'
+            mode: 'static', position: { left: '80px', bottom: '80px' }, color: 'cyan'
         }).on('move', (evt, data) => {
-            // We only care about the vertical push for forward/backward
-            moveInput.y = data.vector.y; 
-            moveInput.x = data.vector.x; // Optional: lateral strafing
-        }).on('end', () => { moveInput = { x: 0, y: 0 }; });
+            cyclic.x = data.vector.x; 
+            cyclic.y = data.vector.y; 
+        }).on('end', () => { cyclic = { x: 0, y: 0 }; });
 
-        // Right Joystick: REVERSED Rotation
+        // Right Joystick: REVERSED Rotation & Altitude
         nipplejs.create({
             zone: document.getElementById('right-joystick'),
-            mode: 'static', position: { right: '75px', bottom: '75px' }, color: 'red'
+            mode: 'static', position: { right: '80px', bottom: '80px' }, color: 'orange'
         }).on('move', (evt, data) => {
-            // Reversing the logic: - data.vector.x instead of +
-            rotateInput = -data.vector.x * 3; 
-        }).on('end', () => { rotateInput = 0; });
+            pedals.yaw = -data.vector.x * 2.5; // Reversed as requested
+            pedals.alt = data.vector.y * 0.03;
+        }).on('end', () => { pedals.yaw = 0; pedals.alt = 0; });
 
         function update() {
             if (heli) {
-                // 1. Update Rotation First
-                let rotation = heli.getAttribute('rotation');
-                let newYaw = rotation.y + rotateInput;
+                let rot = heli.getAttribute('rotation');
+                let pos = heli.getAttribute('position');
+
+                // 1. Handle Rotation (Yaw)
+                let newYaw = rot.y + pedals.yaw;
                 heli.setAttribute('rotation', { x: 0, y: newYaw, z: 0 });
 
-                // 2. Calculate Directional Movement
-                // Convert degrees to radians for JS Math functions
+                // 2. Handle Directional Movement (Cyclic)
                 let angleRad = (newYaw * Math.PI) / 180;
                 
-                let currPos = heli.getAttribute('position');
+                // Forward/Backward component
+                let fwdX = Math.sin(angleRad) * (cyclic.y * speed);
+                let fwdZ = Math.cos(angleRad) * (cyclic.y * speed);
 
-                // The Magic: Calculate X and Z based on where the heli is facing
-                // Forward on joystick (moveInput.y) pushes us along the Sine/Cosine of our angle
-                let dx = Math.sin(angleRad) * (moveInput.y * speed);
-                let dz = Math.cos(angleRad) * (moveInput.y * speed);
+                // Strafe Left/Right component (perpendicular to heading)
+                let strafeAngle = angleRad + (Math.PI / 2);
+                let strX = Math.sin(strafeAngle) * (cyclic.x * speed);
+                let strZ = Math.cos(strafeAngle) * (cyclic.x * speed);
 
                 heli.setAttribute('position', {
-                    x: currPos.x + dx,
-                    y: currPos.y, 
-                    z: currPos.z + dz
+                    x: pos.x + fwdX + strX,
+                    y: Math.max(0.1, pos.y + pedals.alt), // Ground floor clamp
+                    z: pos.z + fwdZ + strZ
                 });
             }
             requestAnimationFrame(update);
