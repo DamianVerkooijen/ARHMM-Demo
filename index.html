@@ -1,129 +1,98 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR Joystick Cube - iPad 5th Gen</title>
+    <title>AR Helicopter Sim</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-world-aframe.prod.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
-
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        
-        /* UI Layer for Joysticks */
+        body { margin: 0; overflow: hidden; }
         #ui-container {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            height: 200px;
-            z-index: 1000;
-            pointer-events: none; /* Allow clicks to pass through to AR if needed */
-            display: flex;
-            justify-content: space-between;
-            padding: 0 40px;
-            box-sizing: border-box;
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 200px;
+            z-index: 10; display: flex; justify-content: space-between; pointer-events: none;
         }
-
-        .joystick-zone {
-            width: 150px;
-            height: 150px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 50%;
-            pointer-events: auto; /* Capture touch here */
-            touch-action: none;
-        }
-
-        #instructions {
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            z-index: 1001;
-            text-shadow: 1px 1px 2px black;
-        }
+        .joystick-zone { width: 150px; height: 150px; pointer-events: auto; margin: 20px; }
     </style>
 </head>
-<body>
 
-    <div id="instructions">Point camera at floor & move slowly to detect surface</div>
+<body style="margin: 0px; overflow: hidden;">
 
     <div id="ui-container">
-        <div id="left-joy" class="joystick-zone"></div>
-        <div id="right-joy" class="joystick-zone"></div>
+        <div id="left-joystick" class="joystick-zone"></div>
+        <div id="right-joystick" class="joystick-zone"></div>
     </div>
 
-    <a-scene mindar-world="autoStart: true" embedded color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="logarithmicDepthBuffer: true;">
         
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-assets>
+            <a-asset-item id="heli-model" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/ToyCar/glTF/ToyCar.gltf"></a-asset-item>
+        </a-assets>
 
-        <a-entity id="target-container" mindar-world-target>
-            <a-box id="cube" position="0 0.5 0" material="color: #4CC3D9; opacity: 0.8" shadow></a-box>
-            <a-plane rotation="-90 0 0" width="2" height="2" material="opacity: 0.2; color: white"></a-plane>
-        </a-entity>
+        <a-marker preset="hiro">
+            <a-entity id="heli-rig" position="0 0.5 0">
+                <a-box id="heli-body" width="0.5" height="0.3" depth="1" color="#333">
+                    <a-box position="0 0.2 0" width="0.8" height="0.02" depth="0.1" color="#888" 
+                           animation="property: rotation; to: 0 360 0; loop: true; dur: 200; easing: linear">
+                    </a-box>
+                </a-box>
+            </a-entity>
+        </a-marker>
 
-        <a-light type="directional" position="0 5 0"></a-light>
-        <a-light type="ambient" intensity="0.5"></a-light>
+        <a-entity camera></a-entity>
     </a-scene>
 
     <script>
-        const cube = document.querySelector('#cube');
-        let moveData = { x: 0, y: 0 };
-        let altitudeData = 0;
+        const heli = document.querySelector('#heli-rig');
+        let moveInput = { x: 0, y: 0 };
+        let rotateInput = 0;
         const speed = 0.05;
 
-        // Initialize Left Joystick (Movement)
-        const leftJoy = nipplejs.create({
-            zone: document.getElementById('left-joy'),
-            mode: 'static',
-            position: { left: '75px', bottom: '75px' },
-            color: 'cyan'
-        });
+        // Left Joystick: Move forward/backward relative to heading
+        nipplejs.create({
+            zone: document.getElementById('left-joystick'),
+            mode: 'static', position: { left: '75px', bottom: '75px' }, color: 'blue'
+        }).on('move', (evt, data) => {
+            // We only care about the vertical push for forward/backward
+            moveInput.y = data.vector.y; 
+            moveInput.x = data.vector.x; // Optional: lateral strafing
+        }).on('end', () => { moveInput = { x: 0, y: 0 }; });
 
-        leftJoy.on('move', (evt, data) => {
-            moveData.x = data.vector.x;
-            moveData.y = data.vector.y;
-        });
+        // Right Joystick: REVERSED Rotation
+        nipplejs.create({
+            zone: document.getElementById('right-joystick'),
+            mode: 'static', position: { right: '75px', bottom: '75px' }, color: 'red'
+        }).on('move', (evt, data) => {
+            // Reversing the logic: - data.vector.x instead of +
+            rotateInput = -data.vector.x * 3; 
+        }).on('end', () => { rotateInput = 0; });
 
-        leftJoy.on('end', () => {
-            moveData = { x: 0, y: 0 };
-        });
-
-        // Initialize Right Joystick (Altitude)
-        const rightJoy = nipplejs.create({
-            zone: document.getElementById('right-joy'),
-            mode: 'static',
-            position: { right: '75px', bottom: '75px' },
-            color: 'red'
-        });
-
-        rightJoy.on('move', (evt, data) => {
-            // We only care about the vertical (Y) vector for altitude
-            altitudeData = data.vector.y;
-        });
-
-        rightJoy.on('end', () => {
-            altitudeData = 0;
-        });
-
-        // Game Loop to Update Cube Position
         function update() {
-            if (cube) {
-                let pos = cube.getAttribute('position');
-                
-                // Move Forward/Backward (Z) and Left/Right (X)
-                // Note: In AR, -Z is "forward"
-                pos.x += moveData.x * speed;
-                pos.z -= moveData.y * speed; 
-                
-                // Altitude (Y)
-                pos.y += altitudeData * speed;
+            if (heli) {
+                // 1. Update Rotation First
+                let rotation = heli.getAttribute('rotation');
+                let newYaw = rotation.y + rotateInput;
+                heli.setAttribute('rotation', { x: 0, y: newYaw, z: 0 });
 
-                cube.setAttribute('position', pos);
+                // 2. Calculate Directional Movement
+                // Convert degrees to radians for JS Math functions
+                let angleRad = (newYaw * Math.PI) / 180;
+                
+                let currPos = heli.getAttribute('position');
+
+                // The Magic: Calculate X and Z based on where the heli is facing
+                // Forward on joystick (moveInput.y) pushes us along the Sine/Cosine of our angle
+                let dx = Math.sin(angleRad) * (moveInput.y * speed);
+                let dz = Math.cos(angleRad) * (moveInput.y * speed);
+
+                heli.setAttribute('position', {
+                    x: currPos.x + dx,
+                    y: currPos.y, 
+                    z: currPos.z + dz
+                });
             }
             requestAnimationFrame(update);
         }
-
         update();
     </script>
 </body>
